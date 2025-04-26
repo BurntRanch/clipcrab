@@ -1,0 +1,8 @@
+[package]
+name = "clipcrab"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+getopt = "1.1.7"
+getopt-long = "0.3.0"
