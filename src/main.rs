@@ -1,3 +1,10 @@
+mod config;
+pub use config::Config;
+
+extern crate simplelog;
+
+use log::error;
+use simplelog::*;
 use getopt_long::*;
 
 fn version() {
@@ -10,27 +17,28 @@ fn resolve_key<'a>(key: &'a str) -> &'a str {
     match key {
         "h" | "help" => "help",
         "V" | "version" => "version",
-        _ => "unknown",
+        _ => key,
     }
 }
 
-fn parseargs() -> OptResult<()> {
+fn parseargs<'a>(config: &'a config::Config) -> OptResult<()> {
     let longopts = &[
         Opt::new(Some("help".to_owned()), Some('h'), HasArg::NoArgument, "Print this help messgae").unwrap(),
-        Opt::new(Some("version".to_owned()), Some('V'), HasArg::NoArgument, "Print version number along branch").unwrap()
+        Opt::new(Some("version".to_owned()), Some('V'), HasArg::NoArgument, "Print version number along branch").unwrap(),
+        Opt::new(Some("gen-config".to_owned()), None, HasArg::RequiredArgument, "Generate config at path").unwrap(),
     ];
 
     match getopt_long(longopts) {
         Ok(p) => {
-            for (key, _) in p.args.iter() {
+            for (key, value) in p.args.iter() {
                 match resolve_key(key) {
                     "version" => version(),
-                    "help" => usage("crubclip", "blazing fast clipboard history manager", "0.1.0", longopts),
-                    "unknown" => {
-                        println!("Unknown option '{}'", key);
-                        usage("crubclip", "blazing fast clipboard history manager", "0.1.0", longopts) 
+                    "help" => usage("crubclip", "blazing fast clipboard history manager", env!("CARGO_PKG_VERSION"), longopts),
+                    "gen-config" => config.generate_config(value).unwrap(),
+                    _ => {
+                        error!("Unknown option '{}'", key);
+                        usage("crubclip", "blazing fast clipboard history manager", env!("CARGO_PKG_VERSION"), longopts) 
                     }
-                    _ => unreachable!()
                 }
             }
         },
@@ -41,6 +49,17 @@ fn parseargs() -> OptResult<()> {
 }
 
 fn main() {
-    let _ = parseargs();
+    CombinedLogger::init(
+        vec![
+            TermLogger::new(LevelFilter::Warn, simplelog::Config::default(), TerminalMode::Mixed, ColorChoice::Auto),
+        ]
+    ).unwrap();
+
+    let mut config: config::Config = Default::default();
+    let _ = config.init("/tmp/crubclip/config.toml", "/tmp/crubclip/");
+    config.load_config_file("/tmp/crubclip/config.toml");
+
+    let _ = parseargs(&config);
+
     println!("Hello, world!");
 }
