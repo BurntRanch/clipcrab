@@ -6,6 +6,9 @@ extern crate simplelog;
 use log::error;
 use simplelog::*;
 use getopt_long::*;
+use std::io::Read;
+
+use wl_clipboard_rs::paste::{get_contents, ClipboardType, MimeType, Error, Seat};
 
 fn version() {
     println!("{} version {} branch main", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
@@ -48,7 +51,7 @@ fn parseargs<'a>(config: &'a config::Config) -> OptResult<()> {
     Ok(())
 }
 
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     CombinedLogger::init(
         vec![
             TermLogger::new(LevelFilter::Warn, simplelog::Config::default(), TerminalMode::Mixed, ColorChoice::Auto),
@@ -60,6 +63,23 @@ fn main() {
     config.load_config_file("/tmp/crubclip/config.toml");
 
     let _ = parseargs(&config);
+    
+    let result = get_contents(ClipboardType::Regular, Seat::Unspecified, MimeType::Text);
 
-    println!("Hello, world!");
+    match result {
+        Ok((mut pipe, _mime_type)) => {
+            let mut contents = vec![];
+            pipe.read_to_end(&mut contents)?;
+            println!("Clipboard content: {}", String::from_utf8(contents).expect("Clipboard contents should be valid utf8."));
+        }
+
+        Err(Error::NoSeats) | Err(Error::ClipboardEmpty) | Err(Error::NoMimeType) => {
+            // The clipboard is empty, nothing to worry about.
+            println!("Error: Clipboard empty.");
+        }
+
+        Err(err) => Err(err)?
+    };
+
+    Ok(())
 }
