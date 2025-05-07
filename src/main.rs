@@ -6,9 +6,11 @@ extern crate simplelog;
 use log::error;
 use simplelog::*;
 use getopt_long::*;
-use std::io::Read;
+use std::{collections::HashMap, io::Read};
+use openssl::rand::rand_priv_bytes;
 
 use wl_clipboard_rs::paste::{get_contents, ClipboardType, MimeType, Error, Seat};
+use secret_service::{SecretService, EncryptionType};
 
 fn version() {
     println!("{} version {} branch main", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
@@ -51,7 +53,8 @@ fn parseargs<'a>(config: &'a config::Config) -> OptResult<()> {
     Ok(())
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     CombinedLogger::init(
         vec![
             TermLogger::new(LevelFilter::Warn, simplelog::Config::default(), TerminalMode::Mixed, ColorChoice::Auto),
@@ -65,6 +68,42 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _ = parseargs(&config);
     
     let result = get_contents(ClipboardType::Regular, Seat::Unspecified, MimeType::Text);
+
+    let ss = SecretService::connect(EncryptionType::Dh).await?;
+
+    let collection = ss.get_default_collection().await?;
+
+    // Search for our secret. If we can't find it, create a new one.
+    let item_search_results: Vec<secret_service::Item<'_>> = collection.search_items(
+        HashMap::from([("label", "clipcrab")])
+    ).await?;
+
+    let new_item: Option<secret_service::Item<'_>>;
+    let item: Option<&secret_service::Item<'_>>;
+
+    println!("Reading secret.. You may receive a pop-up from your PCs Secret Service");
+
+    if item_search_results.is_empty() {
+        collection.unlock().await?;
+
+        let mut buf = [0; 256];
+        rand_priv_bytes(&mut buf).expect("openssl error");
+
+        new_item = Some(collection.create_item(
+            "clipcrab", HashMap::from([("label", "clipcrab")]),
+            &buf, false, "key/plain"
+        ).await?);
+
+        item = new_item.as_ref();
+    } else {
+        item = Some(item_search_results.first().unwrap());
+        item.unwrap().unlock().await?;
+    }
+
+    assert!((item != None));
+    let _secret: Vec<u8> = item.unwrap().get_secret().await?;
+
+    item.unwrap().lock().await?;
 
     match result {
         Ok((mut pipe, _mime_type)) => {

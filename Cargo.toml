@@ -11,3 +11,6 @@ shellexpand = "3.1.1"
 simplelog = "0.12.2"
 toml = "0.8.21"
 wl-clipboard-rs = "0.9.2"
+tokio = { version = "1.45.0", features = ["full"] }
+secret-service = { version = "5.0.0", features = ["rt-tokio-crypto-rust"] }
+openssl = "0.10.72"
