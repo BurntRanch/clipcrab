@@ -103,8 +103,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     assert!((item != None));
     let _secret: Vec<u8> = item.unwrap().get_secret().await?;
 
-    item.unwrap().lock().await?;
-
     match result {
         Ok((mut pipe, _mime_type)) => {
             let mut contents = vec![];
